@@ -43,6 +43,7 @@ interface DashboardContentProps {
 export function DashboardContent({ profile, weightLogs, todayNutrition, hasMoodCheck }: DashboardContentProps) {
   const [showMoodCheck, setShowMoodCheck] = useState(false)
   const [showRecipeDialog, setShowRecipeDialog] = useState(false)
+  const [showHealthSyncDialog, setShowHealthSyncDialog] = useState(false)
   const [ingredients, setIngredients] = useState("")
   const router = useRouter()
 
@@ -188,12 +189,14 @@ export function DashboardContent({ profile, weightLogs, todayNutrition, hasMoodC
                   <Utensils className="mr-2 h-4 w-4" />
                   Browse Recipes
                 </Button>
-                <Link href="/settings">
-                  <Button variant="outline" className="w-full justify-start glass bg-transparent">
-                    <Activity className="mr-2 h-4 w-4" />
-                    Health Sync
-                  </Button>
-                </Link>
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start glass bg-transparent"
+                  onClick={() => setShowHealthSyncDialog(true)}
+                >
+                  <Activity className="mr-2 h-4 w-4" />
+                  Health Sync
+                </Button>
                 <a 
                   href="https://gemini.google.com/app" 
                   target="_blank" 
@@ -223,14 +226,6 @@ export function DashboardContent({ profile, weightLogs, todayNutrition, hasMoodC
               </CardContent>
             </Card>
           </div>
-
-          {/* Your Why Reminder */}
-          <Card className="glass border-white/10 border-l-4 border-l-primary">
-            <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground mb-2">Your Why:</p>
-              <p className="italic text-balance">&ldquo;{profile.why}&rdquo;</p>
-            </CardContent>
-          </Card>
         </div>
       </div>
 
@@ -277,6 +272,100 @@ export function DashboardContent({ profile, weightLogs, todayNutrition, hasMoodC
                 Search Recipes
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Health Sync QR Code Dialog */}
+      <Dialog open={showHealthSyncDialog} onOpenChange={setShowHealthSyncDialog}>
+        <DialogContent className="glass-strong">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5" />
+              Sync Your Health Data
+            </DialogTitle>
+            <DialogDescription>
+              Scan the QR code with your phone to connect Apple Health or Google Fit
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 pt-4">
+            {/* QR Code Display */}
+            <div className="flex flex-col items-center space-y-4">
+              <div className="p-4 bg-white rounded-xl">
+                {/* QR Code pattern */}
+                <svg width="160" height="160" viewBox="0 0 160 160" className="text-black">
+                  <rect x="0" y="0" width="160" height="160" fill="white" />
+                  {/* Corner squares */}
+                  <rect x="10" y="10" width="40" height="40" fill="black" />
+                  <rect x="15" y="15" width="30" height="30" fill="white" />
+                  <rect x="20" y="20" width="20" height="20" fill="black" />
+                  
+                  <rect x="110" y="10" width="40" height="40" fill="black" />
+                  <rect x="115" y="15" width="30" height="30" fill="white" />
+                  <rect x="120" y="20" width="20" height="20" fill="black" />
+                  
+                  <rect x="10" y="110" width="40" height="40" fill="black" />
+                  <rect x="15" y="115" width="30" height="30" fill="white" />
+                  <rect x="20" y="120" width="20" height="20" fill="black" />
+                  
+                  {/* Data pattern */}
+                  <rect x="60" y="10" width="10" height="10" fill="black" />
+                  <rect x="80" y="10" width="10" height="10" fill="black" />
+                  <rect x="60" y="30" width="10" height="10" fill="black" />
+                  <rect x="70" y="20" width="10" height="10" fill="black" />
+                  <rect x="90" y="20" width="10" height="10" fill="black" />
+                  
+                  <rect x="60" y="60" width="10" height="10" fill="black" />
+                  <rect x="70" y="70" width="10" height="10" fill="black" />
+                  <rect x="80" y="60" width="10" height="10" fill="black" />
+                  <rect x="90" y="70" width="10" height="10" fill="black" />
+                  <rect x="80" y="80" width="10" height="10" fill="black" />
+                  
+                  <rect x="10" y="60" width="10" height="10" fill="black" />
+                  <rect x="30" y="70" width="10" height="10" fill="black" />
+                  <rect x="10" y="80" width="10" height="10" fill="black" />
+                  <rect x="40" y="60" width="10" height="10" fill="black" />
+                  
+                  <rect x="110" y="60" width="10" height="10" fill="black" />
+                  <rect x="130" y="70" width="10" height="10" fill="black" />
+                  <rect x="120" y="80" width="10" height="10" fill="black" />
+                  <rect x="140" y="90" width="10" height="10" fill="black" />
+                  
+                  <rect x="60" y="110" width="10" height="10" fill="black" />
+                  <rect x="80" y="120" width="10" height="10" fill="black" />
+                  <rect x="70" y="130" width="10" height="10" fill="black" />
+                  <rect x="90" y="110" width="10" height="10" fill="black" />
+                  
+                  <rect x="110" y="110" width="10" height="10" fill="black" />
+                  <rect x="130" y="120" width="10" height="10" fill="black" />
+                  <rect x="120" y="140" width="10" height="10" fill="black" />
+                  <rect x="140" y="130" width="10" height="10" fill="black" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium text-center">Scan with your phone camera</p>
+            </div>
+
+            {/* Platform options */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-4 rounded-lg glass text-center space-y-2">
+                <svg className="h-8 w-8 mx-auto" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                </svg>
+                <p className="text-sm font-medium">Apple Health</p>
+                <p className="text-xs text-muted-foreground">iOS 15+</p>
+              </div>
+              <div className="p-4 rounded-lg glass text-center space-y-2">
+                <svg className="h-8 w-8 mx-auto" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                </svg>
+                <p className="text-sm font-medium">Google Fit</p>
+                <p className="text-xs text-muted-foreground">Android</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-center text-muted-foreground">
+              Your health data stays on your device and is never uploaded to external servers.
+            </p>
           </div>
         </DialogContent>
       </Dialog>
