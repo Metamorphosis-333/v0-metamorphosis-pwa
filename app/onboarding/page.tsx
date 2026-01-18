@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { VoiceButton } from "@/components/voice-button"
 import { QuoteBanner } from "@/components/quote-banner"
 import { Progress } from "@/components/ui/progress"
-import { Mic } from "lucide-react"
+
 import { type UnitSystem, getUnitLabels, lbsToKg, kgToLbs, inchesToCm, cmToInches } from "@/lib/unit-conversion"
 import { saveProfile, addWeightLog, setOnboardingComplete, getProfile } from "@/lib/local-storage"
 
@@ -196,13 +196,8 @@ setIsReady(true)
 
         <Card className="glass-strong border-white/20">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              {step === 1 && (
-                <>
-                  <span>Who are you?</span>
-                  <Mic className="w-5 h-5 text-primary animate-pulse" />
-                </>
-              )}
+            <CardTitle>
+              {step === 1 && "Who are you?"}
               {step === 2 && "The Numbers"}
               {step === 3 && "Let's Set Your Goals"}
             </CardTitle>

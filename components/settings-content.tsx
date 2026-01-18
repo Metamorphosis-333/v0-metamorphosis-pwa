@@ -10,12 +10,12 @@ import { Textarea } from "@/components/ui/textarea"
 import { VoiceButton } from "@/components/voice-button"
 import { QuoteBanner } from "@/components/quote-banner"
 import { AppleHealthImport } from "@/components/apple-health-import"
-import { ArrowLeft, Save, User, Activity, Brain, LogOut, AlertTriangle, Download, Upload, Dumbbell } from "lucide-react"
+import { ArrowLeft, Save, User, Activity, Brain, LogOut, AlertTriangle, Dumbbell } from "lucide-react"
 import Link from "next/link"
 import { type UnitSystem, getUnitLabels, lbsToKg, kgToLbs, inchesToCm, cmToInches } from "@/lib/unit-conversion"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ProfileEnhancements } from "@/components/profile-enhancements"
-import { saveProfile, addWeightLog, clearAllLocalData, exportAllData, importData } from "@/lib/local-storage"
+import { saveProfile, addWeightLog, clearAllLocalData } from "@/lib/local-storage"
 
 interface SettingsContentProps {
   profile: {
@@ -143,18 +143,7 @@ export function SettingsContent({ profile: initialProfile }: SettingsContentProp
     }
   }
 
-  const handleExportData = () => {
-    const data = exportAllData()
-    const blob = new Blob([data], { type: "application/json" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `metamorphosis-backup-${new Date().toISOString().split("T")[0]}.json`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }
+
 
   const handleImportData = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -377,34 +366,6 @@ export function SettingsContent({ profile: initialProfile }: SettingsContentProp
                 All your data is stored locally on this device only. If you clear your browser data, 
                 switch devices, or use a different browser, your progress will not be available.
               </p>
-            </div>
-            
-            <div className="space-y-3">
-              <p className="text-sm font-medium">Backup & Restore</p>
-              <p className="text-xs text-muted-foreground">
-                Export your data to save a backup, or import a previous backup to restore your progress.
-              </p>
-              
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={handleExportData} className="flex-1 bg-transparent">
-                  <Download className="mr-2 h-4 w-4" />
-                  Export Data
-                </Button>
-                <Label className="flex-1">
-                  <input
-                    type="file"
-                    accept=".json"
-                    onChange={handleImportData}
-                    className="hidden"
-                  />
-                  <Button variant="outline" className="w-full bg-transparent" asChild>
-                    <span>
-                      <Upload className="mr-2 h-4 w-4" />
-                      Import Data
-                    </span>
-                  </Button>
-                </Label>
-              </div>
             </div>
           </CardContent>
         </Card>
