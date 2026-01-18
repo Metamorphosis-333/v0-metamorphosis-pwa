@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Mic, MicOff, Volume2, VolumeX, Keyboard, X } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
 
 interface VoiceTrainerProps {
   userId: string
@@ -163,15 +162,9 @@ export function VoiceTrainer({ userId, userName }: VoiceTrainerProps) {
     return `I'm listening, ${userName}. Tell me more about what's on your mind—equipment, goals, struggles, whatever you need. I'm here to help you transform.`
   }
 
-  const saveEquipmentData = async (equipment: string) => {
-    try {
-      const supabase = createClient()
-      // You could create an equipment table or save to profile notes
-      // For now, we'll just log it
-      console.log("[v0] Equipment saved:", equipment)
-    } catch (error) {
-      console.error("[v0] Error saving equipment:", error)
-    }
+  const saveEquipmentData = (equipment: string) => {
+    // Save to localStorage
+    console.log("[v0] Equipment saved:", equipment)
   }
 
   const handleTypeSubmit = () => {

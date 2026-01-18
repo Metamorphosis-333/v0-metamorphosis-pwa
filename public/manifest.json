@@ -1,24 +1,56 @@
 {
-  "name": "Metamorphosis",
+  "name": "Metamorphosis - AI Fitness Companion",
   "short_name": "Metamorphosis",
-  "description": "Your AI-powered fitness transformation companion",
+  "description": "Your hybrid AI dietitian, trainer, and psychiatrist for total transformation",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0a0a0a",
-  "theme_color": "#8b5cf6",
-  "orientation": "portrait",
-  "icons": [
+  "theme_color": "#9333EA",
+  "orientation": "portrait-primary",
+  "categories": ["health", "fitness"],
+  "screenshots": [
     {
       "src": "/icon-192.jpg",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/jpeg",
+      "form_factor": "narrow"
     },
     {
       "src": "/icon-512.jpg",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/jpeg",
+      "form_factor": "narrow"
+    }
+  ],
+  "icons": [
+    {
+      "src": "/icon-192.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Browse Recipes",
+      "short_name": "Recipes",
+      "description": "Quick access to the recipe library",
+      "url": "/recipes",
+      "icons": [{ "src": "/icon-192.jpg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Health Sync",
+      "short_name": "Health",
+      "description": "Sync your health data",
+      "url": "/health-sync",
+      "icons": [{ "src": "/icon-192.jpg", "sizes": "192x192" }]
     }
   ]
 }

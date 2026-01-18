@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -12,6 +11,7 @@ import { QuoteBanner } from "@/components/quote-banner"
 import { Progress } from "@/components/ui/progress"
 import { Mic } from "lucide-react"
 import { type UnitSystem, getUnitLabels, lbsToKg, kgToLbs, inchesToCm, cmToInches } from "@/lib/unit-conversion"
+import { saveProfile, addWeightLog, setOnboardingComplete, getProfile } from "@/lib/local-storage"
 
 export default function OnboardingPage() {
   const [step, setStep] = useState(1)
@@ -19,29 +19,37 @@ export default function OnboardingPage() {
   const [age, setAge] = useState("")
   const [weight, setWeight] = useState("")
   const [height, setHeight] = useState("")
+  const [heightFeet, setHeightFeet] = useState("")
+  const [heightInches, setHeightInches] = useState("")
   const [unitSystem, setUnitSystem] = useState<UnitSystem>("imperial")
+  const [goal, setGoal] = useState<"weight_loss" | "weight_gain" | "muscle_building" | "maintaining" | "">("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+  const [isReady, setIsReady] = useState(false)
   const router = useRouter()
+
+  const GOALS = [
+    { id: "weight_loss", label: "Weight Loss", description: "Shed pounds and feel lighter" },
+    { id: "weight_gain", label: "Weight Gain", description: "Build mass and strength" },
+    { id: "muscle_building", label: "Muscle Building", description: "Sculpt and define" },
+    { id: "maintaining", label: "Maintaining", description: "Stay where you are" },
+  ] as const
 
   const progress = (step / 3) * 100
   const unitLabels = getUnitLabels(unitSystem)
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const supabase = createClient()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) {
-        router.push("/auth/login")
-      } else {
-        setIsCheckingAuth(false)
+    // Check if user already has a profile, pre-fill if exists
+    const existingProfile = getProfile()
+    if (existingProfile) {
+      setName(existingProfile.name || "")
+      setAge(existingProfile.age?.toString() || "")
+      if (existingProfile.unit_preference) {
+        setUnitSystem(existingProfile.unit_preference)
       }
     }
-    checkAuth()
-  }, [router])
+setIsReady(true)
+  }, [])
 
   const handleUnitToggle = (newSystem: UnitSystem) => {
     // Convert existing values to new unit system
@@ -56,41 +64,71 @@ export default function OnboardingPage() {
     if (height) {
       const heightNum = Number.parseFloat(height)
       if (newSystem === "metric" && unitSystem === "imperial") {
+        // Convert total inches to cm
         setHeight(inchesToCm(heightNum).toFixed(0))
+        setHeightFeet("")
+        setHeightInches("")
       } else if (newSystem === "imperial" && unitSystem === "metric") {
-        setHeight(cmToInches(heightNum).toFixed(0))
+        // Convert cm to total inches, then split into feet/inches
+        const totalInches = cmToInches(heightNum)
+        const feet = Math.floor(totalInches / 12)
+        const inches = Math.round(totalInches - feet * 12)
+        setHeightFeet(feet.toString())
+        setHeightInches(inches.toString())
+        setHeight("")
       }
     }
     setUnitSystem(newSystem)
   }
 
-  const handleVoiceInput = (field: "name" | "age" | "weight" | "height") => (transcript: string) => {
-    // Parse numbers from voice input
-    const extractNumber = (text: string) => {
-      const match = text.match(/\d+/)
-      return match ? match[0] : text
+  const handleVoiceInput =
+    (field: "name" | "age" | "weight" | "height" | "heightFeet" | "heightInches") => (transcript: string) => {
+      const extractNumber = (text: string) => {
+        const match = text.match(/\d+/)
+        return match ? match[0] : text
+      }
+
+      switch (field) {
+        case "name":
+          setName(transcript)
+          break
+        case "age":
+          setAge(extractNumber(transcript))
+          break
+        case "weight":
+          setWeight(extractNumber(transcript))
+          break
+        case "height":
+          setHeight(extractNumber(transcript))
+          break
+        case "heightFeet":
+          setHeightFeet(extractNumber(transcript))
+          break
+        case "heightInches":
+          setHeightInches(extractNumber(transcript))
+          break
+      }
     }
 
-    switch (field) {
-      case "name":
-        setName(transcript)
-        break
-      case "age":
-        setAge(extractNumber(transcript))
-        break
-      case "weight":
-        setWeight(extractNumber(transcript))
-        break
-      case "height":
-        setHeight(extractNumber(transcript))
-        break
+  const getTotalHeight = () => {
+    if (unitSystem === "imperial" && heightFeet && heightInches) {
+      return (Number.parseFloat(heightFeet) * 12 + Number.parseFloat(heightInches)).toString()
     }
+    return height
   }
 
   const handleNext = () => {
     if (step === 1 && !name) return
-    if (step === 2 && (!age || !weight || !height)) return
-
+    if (step === 2) {
+      // Check for valid height input based on unit system
+      if (unitSystem === "imperial") {
+        if (!age || !weight || !heightFeet || !heightInches) return
+      } else {
+        if (!age || !weight || !height) return
+      }
+      const totalHeight = getTotalHeight()
+      setHeight(totalHeight)
+    }
     if (step < 3) {
       setStep(step + 1)
     }
@@ -99,38 +137,31 @@ export default function OnboardingPage() {
   const handleSubmit = async () => {
     setIsLoading(true)
     setError(null)
-    const supabase = createClient()
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) throw new Error("Not authenticated")
-
       const weightInLbs = unitSystem === "metric" ? kgToLbs(Number.parseFloat(weight)) : Number.parseFloat(weight)
-      const heightInInches = unitSystem === "metric" ? cmToInches(Number.parseFloat(height)) : Number.parseFloat(height)
+      const totalHeight = getTotalHeight()
+      const heightInInches =
+        unitSystem === "metric" ? cmToInches(Number.parseFloat(totalHeight)) : Number.parseFloat(totalHeight)
 
-      const { error: profileError } = await supabase.from("profiles").upsert({
-        id: user.id,
+// Save profile to localStorage
+      saveProfile({
         name,
         age: Number.parseInt(age),
         weight: weightInLbs,
         height: heightInInches,
         unit_preference: unitSystem,
+        goal: goal || undefined,
       })
 
-      if (profileError) throw profileError
+      // Create initial weight log in localStorage
+      addWeightLog(weightInLbs)
 
-      // Create initial weight log
-      const { error: weightError } = await supabase.from("weight_logs").insert({
-        user_id: user.id,
-        weight: weightInLbs,
-      })
+      // Mark onboarding as complete
+      setOnboardingComplete()
 
-      if (weightError) throw weightError
-
+      // Navigate to dashboard
       router.push("/dashboard")
-      router.refresh()
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred")
     } finally {
@@ -138,7 +169,7 @@ export default function OnboardingPage() {
     }
   }
 
-  if (isCheckingAuth) {
+  if (!isReady) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -215,7 +246,7 @@ export default function OnboardingPage() {
                           : "text-muted-foreground hover:text-foreground"
                       }`}
                     >
-                      Imperial (lbs / in)
+                      Imperial (lbs / ft/in)
                     </button>
                     <button
                       type="button"
@@ -230,51 +261,98 @@ export default function OnboardingPage() {
                     </button>
                   </div>
 
-                  <div className="grid gap-2">
-                    <Label htmlFor="age">Age</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id="age"
-                        type="number"
-                        placeholder="30"
-                        value={age}
-                        onChange={(e) => setAge(e.target.value)}
-                        className="glass"
-                        autoFocus
-                      />
-                      <VoiceButton onTranscript={handleVoiceInput("age")} size="icon" />
+                  <div className="grid gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="age">Age</Label>
+                      <div className="flex gap-2 items-center">
+                        <Input
+                          id="age"
+                          type="number"
+                          placeholder="30"
+                          value={age}
+                          onChange={(e) => setAge(e.target.value)}
+                          className="glass flex-1"
+                          autoFocus
+                          min="13"
+                          max="120"
+                        />
+                        <VoiceButton onTranscript={handleVoiceInput("age")} size="icon" />
+                      </div>
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label htmlFor="weight">Weight ({unitLabels.weight})</Label>
+                      <div className="flex gap-2 items-center">
+                        <Input
+                          id="weight"
+                          type="number"
+                          step="0.1"
+                          placeholder={unitSystem === "imperial" ? "180" : "82"}
+                          value={weight}
+                          onChange={(e) => setWeight(e.target.value)}
+                          className="glass flex-1"
+                          min="50"
+                          max={unitSystem === "imperial" ? "500" : "227"}
+                        />
+                        <VoiceButton onTranscript={handleVoiceInput("weight")} size="icon" />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {unitSystem === "imperial" ? "Range: 50-500 lbs" : "Range: 23-227 kg"}
+                      </p>
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label>Height {unitSystem === "imperial" ? "(Feet & Inches)" : "(Centimeters)"}</Label>
+                      {unitSystem === "imperial" ? (
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="flex gap-2 items-center">
+                            <Input
+                              type="number"
+                              placeholder="5"
+                              value={heightFeet}
+                              onChange={(e) => setHeightFeet(e.target.value)}
+                              className="glass flex-1"
+                              min="0"
+                              max="8"
+                            />
+                            <span className="text-sm text-muted-foreground whitespace-nowrap">ft</span>
+                            <VoiceButton onTranscript={handleVoiceInput("heightFeet")} size="icon" />
+                          </div>
+                          <div className="flex gap-2 items-center">
+                            <Input
+                              type="number"
+                              placeholder="10"
+                              value={heightInches}
+                              onChange={(e) => setHeightInches(e.target.value)}
+                              className="glass flex-1"
+                              min="0"
+                              max="11"
+                            />
+                            <span className="text-sm text-muted-foreground whitespace-nowrap">in</span>
+                            <VoiceButton onTranscript={handleVoiceInput("heightInches")} size="icon" />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2 items-center">
+                          <Input
+                            type="number"
+                            placeholder="178"
+                            value={height}
+                            onChange={(e) => setHeight(e.target.value)}
+                            className="glass flex-1"
+                            min="0"
+                            max="250"
+                          />
+                          <span className="text-sm text-muted-foreground whitespace-nowrap">cm</span>
+                          <VoiceButton onTranscript={handleVoiceInput("height")} size="icon" />
+                        </div>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        {unitSystem === "imperial" ? "Range: 0-8 ft, 0-11 in" : "Range: 0-250 cm"}
+                      </p>
                     </div>
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="weight">Weight ({unitLabels.weight})</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id="weight"
-                        type="number"
-                        step="0.1"
-                        placeholder={unitSystem === "imperial" ? "180" : "82"}
-                        value={weight}
-                        onChange={(e) => setWeight(e.target.value)}
-                        className="glass"
-                      />
-                      <VoiceButton onTranscript={handleVoiceInput("weight")} size="icon" />
-                    </div>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="height">Height ({unitLabels.height})</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id="height"
-                        type="number"
-                        step="0.1"
-                        placeholder={unitSystem === "imperial" ? "70" : "178"}
-                        value={height}
-                        onChange={(e) => setHeight(e.target.value)}
-                        className="glass"
-                      />
-                      <VoiceButton onTranscript={handleVoiceInput("height")} size="icon" />
-                    </div>
-                  </div>
+
                   <p className="text-xs text-muted-foreground">
                     No judgment. This is just your starting point. Rome wasn&apos;t built in a day.
                   </p>
@@ -283,6 +361,28 @@ export default function OnboardingPage() {
 
               {step === 3 && (
                 <div className="space-y-6">
+                  {/* Goal Selection */}
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium">What's your primary goal?</Label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {GOALS.map((g) => (
+                        <button
+                          key={g.id}
+                          type="button"
+                          onClick={() => setGoal(g.id)}
+                          className={`p-4 rounded-lg border-2 text-left transition-all ${
+                            goal === g.id
+                              ? "border-primary bg-primary/10"
+                              : "border-border glass hover:border-primary/50"
+                          }`}
+                        >
+                          <div className="font-medium text-sm">{g.label}</div>
+                          <div className="text-xs text-muted-foreground mt-1">{g.description}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <div className="p-4 rounded-lg glass space-y-3">
                     <div className="flex justify-between items-center">
                       <span className="text-sm font-medium">Daily Protein Goal</span>
@@ -334,7 +434,10 @@ export default function OnboardingPage() {
                   <Button
                     onClick={handleNext}
                     className="flex-1"
-                    disabled={(step === 1 && !name) || (step === 2 && (!age || !weight || !height))}
+                    disabled={
+                      (step === 1 && !name) || 
+                      (step === 2 && (!age || !weight || (unitSystem === "imperial" ? (!heightFeet || !heightInches) : !height)))
+                    }
                   >
                     Continue
                   </Button>

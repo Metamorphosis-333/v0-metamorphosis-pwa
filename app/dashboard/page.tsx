@@ -1,63 +1,62 @@
-import { redirect } from "next/navigation"
-import { createClient } from "@/lib/supabase/server"
+"use client"
+
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { DashboardContent } from "@/components/dashboard-content"
+import {
+  getProfile,
+  getWeightLogsLast30Days,
+  getTodayNutrition,
+  getTodayMoodCheck,
+  isOnboardingComplete,
+  type LocalProfile,
+  type LocalWeightLog,
+  type LocalNutritionLog,
+} from "@/lib/local-storage"
 
-export default async function DashboardPage() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+export default function DashboardPage() {
+  const router = useRouter()
+  const [isLoading, setIsLoading] = useState(true)
+  const [profile, setProfile] = useState<LocalProfile | null>(null)
+  const [weightLogs, setWeightLogs] = useState<LocalWeightLog[]>([])
+  const [todayNutrition, setTodayNutrition] = useState<LocalNutritionLog | null>(null)
+  const [hasMoodCheck, setHasMoodCheck] = useState(false)
 
-  if (!user) {
-    redirect("/auth/login")
+  useEffect(() => {
+    // Check if user has completed onboarding
+    const userProfile = getProfile()
+    const onboardingDone = isOnboardingComplete()
+
+    if (!userProfile || !onboardingDone || !userProfile.name || !userProfile.age || !userProfile.weight || !userProfile.height) {
+      router.replace("/onboarding")
+      return
+    }
+
+    // Load data from localStorage
+    setProfile(userProfile)
+    setWeightLogs(getWeightLogsLast30Days())
+    setTodayNutrition(getTodayNutrition())
+    setHasMoodCheck(!!getTodayMoodCheck())
+    setIsLoading(false)
+  }, [router])
+
+  if (isLoading || !profile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/5">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
+          <p className="mt-4 text-muted-foreground">Loading your journey...</p>
+        </div>
+      </div>
+    )
   }
-
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle()
-
-  // If no profile or missing required onboarding data, redirect to onboarding
-  if (!profile || !profile.name || !profile.age || !profile.weight || !profile.height) {
-    redirect("/onboarding")
-  }
-
-  // Get weight logs (last 30 days)
-  const thirtyDaysAgo = new Date()
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-
-  const { data: weightLogs } = await supabase
-    .from("weight_logs")
-    .select("*")
-    .eq("user_id", user.id)
-    .gte("logged_at", thirtyDaysAgo.toISOString())
-    .order("logged_at", { ascending: true })
-
-  // Get today's nutrition
-  const today = new Date().toISOString().split("T")[0]
-  const { data: todayNutrition } = await supabase
-    .from("nutrition_logs")
-    .select("*")
-    .eq("user_id", user.id)
-    .eq("logged_at", today)
-    .maybeSingle()
-
-  // Get today's mood check
-  const startOfDay = new Date()
-  startOfDay.setHours(0, 0, 0, 0)
-
-  const { data: todayMood } = await supabase
-    .from("mood_checks")
-    .select("*")
-    .eq("user_id", user.id)
-    .gte("checked_at", startOfDay.toISOString())
-    .order("checked_at", { ascending: false })
-    .limit(1)
-    .maybeSingle()
 
   return (
     <DashboardContent
       profile={profile}
-      weightLogs={weightLogs || []}
+      weightLogs={weightLogs}
       todayNutrition={todayNutrition}
-      hasMoodCheck={!!todayMood}
+      hasMoodCheck={hasMoodCheck}
     />
   )
 }

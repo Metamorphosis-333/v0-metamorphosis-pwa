@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -11,12 +10,12 @@ import { Textarea } from "@/components/ui/textarea"
 import { VoiceButton } from "@/components/voice-button"
 import { QuoteBanner } from "@/components/quote-banner"
 import { AppleHealthImport } from "@/components/apple-health-import"
-import { ArrowLeft, Save, User, Activity, Brain, Dumbbell, Shield, Fingerprint, Loader2 } from "lucide-react"
+import { ArrowLeft, Save, User, Activity, Brain, LogOut, AlertTriangle, Download, Upload, Dumbbell } from "lucide-react"
 import Link from "next/link"
 import { type UnitSystem, getUnitLabels, lbsToKg, kgToLbs, inchesToCm, cmToInches } from "@/lib/unit-conversion"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { isWebAuthnSupported, isPlatformAuthenticatorAvailable } from "@/lib/webauthn"
-import { startRegistration } from "@simplewebauthn/browser"
+import { ProfileEnhancements } from "@/components/profile-enhancements"
+import { saveProfile, addWeightLog, clearAllLocalData, exportAllData, importData } from "@/lib/local-storage"
 
 interface SettingsContentProps {
   profile: {
@@ -33,12 +32,22 @@ interface SettingsContentProps {
 }
 
 export function SettingsContent({ profile: initialProfile }: SettingsContentProps) {
+  const initialUnitSystem = initialProfile.unit_preference || "imperial"
+  
+  // Initialize weight and height based on unit system
+  const initialWeight = initialUnitSystem === "metric" 
+    ? lbsToKg(initialProfile.weight).toFixed(1) 
+    : initialProfile.weight.toFixed(1)
+  const initialHeight = initialUnitSystem === "metric" 
+    ? inchesToCm(initialProfile.height).toFixed(0) 
+    : initialProfile.height.toFixed(0)
+
   const [name, setName] = useState(initialProfile.name)
   const [age, setAge] = useState(initialProfile.age.toString())
-  const [weight, setWeight] = useState("")
-  const [height, setHeight] = useState("")
+  const [weight, setWeight] = useState(initialWeight)
+  const [height, setHeight] = useState(initialHeight)
   const [why, setWhy] = useState(initialProfile.why || "")
-  const [unitSystem, setUnitSystem] = useState<UnitSystem>(initialProfile.unit_preference || "imperial")
+  const [currentUnitSystem, setCurrentUnitSystem] = useState<UnitSystem>(initialUnitSystem)
   const [trainerPersonality, setTrainerPersonality] = useState(initialProfile.trainer_personality || "balanced")
   const [psychiatristPersonality, setPsychiatristPersonality] = useState(
     initialProfile.psychiatrist_personality || "philosophical",
@@ -46,64 +55,29 @@ export function SettingsContent({ profile: initialProfile }: SettingsContentProp
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
-  const [hasPasskey, setHasPasskey] = useState(false)
-  const [isEnablingPasskey, setIsEnablingPasskey] = useState(false)
-  const [passkeyError, setPasskeyError] = useState<string | null>(null)
-  const [passkeySuccess, setPasskeySuccess] = useState(false)
-  const [isBiometricSupported, setIsBiometricSupported] = useState(false)
   const router = useRouter()
 
-  const unitLabels = getUnitLabels(unitSystem)
-
-  // Initialize weight and height in current unit system
-  useState(() => {
-    if (unitSystem === "metric") {
-      setWeight(lbsToKg(initialProfile.weight).toFixed(1))
-      setHeight(inchesToCm(initialProfile.height).toFixed(0))
-    } else {
-      setWeight(initialProfile.weight.toFixed(1))
-      setHeight(initialProfile.height.toFixed(0))
-    }
-  })
-
-  useState(() => {
-    const checkPasskeyAndSupport = async () => {
-      try {
-        // Check device support
-        const supported = isWebAuthnSupported() && (await isPlatformAuthenticatorAvailable())
-        setIsBiometricSupported(supported)
-
-        // Check if user has passkey
-        const supabase = createClient()
-        const { data } = await supabase.from("passkeys").select("id").eq("user_id", initialProfile.id).limit(1)
-
-        setHasPasskey((data?.length || 0) > 0)
-      } catch (error) {
-        console.error("Error checking passkey:", error)
-      }
-    }
-    checkPasskeyAndSupport()
-  })
+  const unitLabels = getUnitLabels(currentUnitSystem)
 
   const handleUnitToggle = (newSystem: UnitSystem) => {
     // Convert existing values to new unit system
     if (weight) {
       const weightNum = Number.parseFloat(weight)
-      if (newSystem === "metric" && unitSystem === "imperial") {
+      if (newSystem === "metric" && currentUnitSystem === "imperial") {
         setWeight(lbsToKg(weightNum).toFixed(1))
-      } else if (newSystem === "imperial" && unitSystem === "metric") {
+      } else if (newSystem === "imperial" && currentUnitSystem === "metric") {
         setWeight(kgToLbs(weightNum).toFixed(1))
       }
     }
     if (height) {
       const heightNum = Number.parseFloat(height)
-      if (newSystem === "metric" && unitSystem === "imperial") {
+      if (newSystem === "metric" && currentUnitSystem === "imperial") {
         setHeight(inchesToCm(heightNum).toFixed(0))
-      } else if (newSystem === "imperial" && unitSystem === "metric") {
+      } else if (newSystem === "imperial" && currentUnitSystem === "metric") {
         setHeight(cmToInches(heightNum).toFixed(0))
       }
     }
-    setUnitSystem(newSystem)
+    setCurrentUnitSystem(newSystem)
   }
 
   const handleVoiceInput = (field: "name" | "age" | "weight" | "height" | "why") => (transcript: string) => {
@@ -135,41 +109,30 @@ export function SettingsContent({ profile: initialProfile }: SettingsContentProp
     setIsLoading(true)
     setError(null)
     setSuccess(false)
-    const supabase = createClient()
 
     try {
       // Convert to imperial for storage
-      const weightInLbs = unitSystem === "metric" ? kgToLbs(Number.parseFloat(weight)) : Number.parseFloat(weight)
-      const heightInInches = unitSystem === "metric" ? cmToInches(Number.parseFloat(height)) : Number.parseFloat(height)
+      const weightInLbs = currentUnitSystem === "metric" ? kgToLbs(Number.parseFloat(weight)) : Number.parseFloat(weight)
+      const heightInInches = currentUnitSystem === "metric" ? cmToInches(Number.parseFloat(height)) : Number.parseFloat(height)
 
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({
-          name,
-          age: Number.parseInt(age),
-          weight: weightInLbs,
-          height: heightInInches,
-          why,
-          unit_preference: unitSystem,
-          trainer_personality: trainerPersonality,
-          psychiatrist_personality: psychiatristPersonality,
-        })
-        .eq("id", initialProfile.id)
-
-      if (updateError) throw updateError
+      // Save to localStorage
+      saveProfile({
+        name,
+        age: Number.parseInt(age),
+        weight: weightInLbs,
+        height: heightInInches,
+        why,
+        unit_preference: currentUnitSystem,
+        trainer_personality: trainerPersonality,
+        psychiatrist_personality: psychiatristPersonality,
+      })
 
       // If weight changed, add a new weight log
       if (weightInLbs !== initialProfile.weight) {
-        const { error: weightError } = await supabase.from("weight_logs").insert({
-          user_id: initialProfile.id,
-          weight: weightInLbs,
-        })
-
-        if (weightError) throw weightError
+        addWeightLog(weightInLbs)
       }
 
       setSuccess(true)
-      router.refresh()
 
       // Reset success message after 3 seconds
       setTimeout(() => setSuccess(false), 3000)
@@ -180,70 +143,65 @@ export function SettingsContent({ profile: initialProfile }: SettingsContentProp
     }
   }
 
-  const handleEnableBiometric = async () => {
-    setIsEnablingPasskey(true)
-    setPasskeyError(null)
-    setPasskeySuccess(false)
+  const handleExportData = () => {
+    const data = exportAllData()
+    const blob = new Blob([data], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `metamorphosis-backup-${new Date().toISOString().split("T")[0]}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
 
-    try {
-      const supabase = createClient()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+  const handleImportData = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
 
-      if (!user?.email) {
-        throw new Error("User email not found")
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const content = e.target?.result as string
+      if (importData(content)) {
+        setSuccess(true)
+        setTimeout(() => {
+          window.location.reload()
+        }, 1000)
+      } else {
+        setError("Failed to import data. Invalid file format.")
       }
-
-      // Start registration
-      const optionsResponse = await fetch("/api/passkey/register/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: user.email,
-          name: initialProfile.name,
-        }),
-      })
-
-      if (!optionsResponse.ok) {
-        throw new Error("Failed to start passkey registration")
-      }
-
-      const options = await optionsResponse.json()
-
-      // Create credential
-      const credential = await startRegistration(options)
-
-      // Finish registration
-      const finishResponse = await fetch("/api/passkey/register/finish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: user.email,
-          credential,
-          challenge: options.challenge,
-          deviceName: navigator.userAgent.includes("iPhone")
-            ? "iPhone"
-            : navigator.userAgent.includes("Mac")
-              ? "Mac"
-              : "Device",
-        }),
-      })
-
-      if (!finishResponse.ok) {
-        throw new Error("Failed to complete passkey registration")
-      }
-
-      setHasPasskey(true)
-      setPasskeySuccess(true)
-
-      setTimeout(() => setPasskeySuccess(false), 3000)
-    } catch (err) {
-      console.error("[v0] Passkey registration error:", err)
-      setPasskeyError(err instanceof Error ? err.message : "Failed to enable biometric login")
-    } finally {
-      setIsEnablingPasskey(false)
     }
+    reader.readAsText(file)
+  }
+
+  const handleClearData = () => {
+    if (confirm("Are you sure you want to clear all your data? This cannot be undone.")) {
+      clearAllLocalData()
+      window.location.href = "/landing"
+    }
+  }
+
+  const handleLogout = () => {
+    // Clear all metamorphosis data
+    clearAllLocalData()
+
+    // Clear session storage too
+    sessionStorage.clear()
+
+    // Clear all cookies
+    const cookies = document.cookie.split(";")
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i]
+      const eqPos = cookie.indexOf("=")
+      const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim()
+
+      document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
+      document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`
+    }
+
+    // Hard redirect to landing
+    window.location.href = "/landing"
   }
 
   return (
@@ -276,12 +234,12 @@ export function SettingsContent({ profile: initialProfile }: SettingsContentProp
           <CardContent className="space-y-4">
             <div className="grid gap-2">
               <Label htmlFor="name">Name</Label>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <Input
                   id="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="glass"
+                  className="glass flex-1"
                   placeholder="Your name"
                 />
                 <VoiceButton onTranscript={handleVoiceInput("name")} size="icon" />
@@ -290,13 +248,13 @@ export function SettingsContent({ profile: initialProfile }: SettingsContentProp
 
             <div className="grid gap-2">
               <Label htmlFor="age">Age</Label>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <Input
                   id="age"
                   type="number"
                   value={age}
                   onChange={(e) => setAge(e.target.value)}
-                  className="glass"
+                  className="glass flex-1"
                   placeholder="30"
                 />
                 <VoiceButton onTranscript={handleVoiceInput("age")} size="icon" />
@@ -305,11 +263,11 @@ export function SettingsContent({ profile: initialProfile }: SettingsContentProp
 
             <div className="grid gap-2">
               <Label>Your Why</Label>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-start">
                 <Textarea
                   value={why}
                   onChange={(e) => setWhy(e.target.value)}
-                  className="glass min-h-[100px]"
+                  className="glass min-h-[100px] flex-1"
                   placeholder="What drives your transformation?"
                 />
                 <VoiceButton onTranscript={handleVoiceInput("why")} size="icon" />
@@ -336,7 +294,7 @@ export function SettingsContent({ profile: initialProfile }: SettingsContentProp
                 type="button"
                 onClick={() => handleUnitToggle("imperial")}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  unitSystem === "imperial"
+                  currentUnitSystem === "imperial"
                     ? "bg-primary text-primary-foreground shadow-lg"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
@@ -347,7 +305,7 @@ export function SettingsContent({ profile: initialProfile }: SettingsContentProp
                 type="button"
                 onClick={() => handleUnitToggle("metric")}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  unitSystem === "metric"
+                  currentUnitSystem === "metric"
                     ? "bg-primary text-primary-foreground shadow-lg"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
@@ -358,15 +316,15 @@ export function SettingsContent({ profile: initialProfile }: SettingsContentProp
 
             <div className="grid gap-2">
               <Label htmlFor="weight">Weight ({unitLabels.weight})</Label>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <Input
                   id="weight"
                   type="number"
                   step="0.1"
                   value={weight}
                   onChange={(e) => setWeight(e.target.value)}
-                  className="glass"
-                  placeholder={unitSystem === "imperial" ? "180" : "82"}
+                  className="glass flex-1"
+                  placeholder={currentUnitSystem === "imperial" ? "180" : "82"}
                 />
                 <VoiceButton onTranscript={handleVoiceInput("weight")} size="icon" />
               </div>
@@ -377,15 +335,15 @@ export function SettingsContent({ profile: initialProfile }: SettingsContentProp
 
             <div className="grid gap-2">
               <Label htmlFor="height">Height ({unitLabels.height})</Label>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <Input
                   id="height"
                   type="number"
                   step="0.1"
                   value={height}
                   onChange={(e) => setHeight(e.target.value)}
-                  className="glass"
-                  placeholder={unitSystem === "imperial" ? "70" : "178"}
+                  className="glass flex-1"
+                  placeholder={currentUnitSystem === "imperial" ? "70" : "178"}
                 />
                 <VoiceButton onTranscript={handleVoiceInput("height")} size="icon" />
               </div>
@@ -399,94 +357,60 @@ export function SettingsContent({ profile: initialProfile }: SettingsContentProp
                   files.
                 </p>
               </div>
-              <AppleHealthImport userId={initialProfile.id} unitSystem={unitSystem} />
+              <AppleHealthImport userId={initialProfile.id} unitSystem={currentUnitSystem} />
             </div>
           </CardContent>
         </Card>
 
-        {/* Security */}
-        <Card className="glass-strong border-white/20">
+        {/* Local Storage Warning */}
+        <Card className="glass-strong border-yellow-500/30 bg-yellow-500/5">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5" />
-              Security
+            <CardTitle className="flex items-center gap-2 text-yellow-600">
+              <AlertTriangle className="h-5 w-5" />
+              Local Storage Only
             </CardTitle>
-            <CardDescription>Manage your authentication methods</CardDescription>
+            <CardDescription>Important information about your data</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="p-4 rounded-lg glass bg-yellow-500/10 border border-yellow-500/20">
+              <p className="text-sm text-yellow-700 leading-relaxed">
+                All your data is stored locally on this device only. If you clear your browser data, 
+                switch devices, or use a different browser, your progress will not be available.
+              </p>
+            </div>
+            
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <Fingerprint className="h-4 w-4 text-primary" />
-                    <Label className="text-base">FaceID / Biometric Login</Label>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {hasPasskey
-                      ? "Biometric authentication is enabled on this device"
-                      : "Use Face ID, Touch ID, or other device biometrics for quick, secure login"}
-                  </p>
-                </div>
-              </div>
-
-              {!isBiometricSupported ? (
-                <div className="p-4 rounded-lg glass bg-yellow-500/10 border border-yellow-500/20">
-                  <p className="text-sm text-muted-foreground">
-                    Passkeys are not supported on this device or browser. Try using Safari on iPhone or Mac.
-                  </p>
-                </div>
-              ) : hasPasskey ? (
-                <div className="p-4 rounded-lg glass bg-green-500/10 border border-green-500/20">
-                  <div className="flex items-center gap-2">
-                    <Shield className="h-4 w-4 text-green-500" />
-                    <p className="text-sm text-green-500 font-medium">Biometric login is active</p>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    You can now use Face ID or Touch ID to sign in on this device
-                  </p>
-                </div>
-              ) : (
-                <Button
-                  onClick={handleEnableBiometric}
-                  disabled={isEnablingPasskey}
-                  className="w-full h-14 text-base"
-                  size="lg"
-                >
-                  {isEnablingPasskey ? (
-                    <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      Setting up biometrics...
-                    </>
-                  ) : (
-                    <>
-                      <Fingerprint className="mr-2 h-5 w-5" />
-                      Enable FaceID / Biometric Login
-                    </>
-                  )}
+              <p className="text-sm font-medium">Backup & Restore</p>
+              <p className="text-xs text-muted-foreground">
+                Export your data to save a backup, or import a previous backup to restore your progress.
+              </p>
+              
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={handleExportData} className="flex-1 bg-transparent">
+                  <Download className="mr-2 h-4 w-4" />
+                  Export Data
                 </Button>
-              )}
-
-              {passkeyError && (
-                <div className="p-4 rounded-lg glass bg-destructive/10 border border-destructive/20">
-                  <p className="text-sm text-destructive">{passkeyError}</p>
-                </div>
-              )}
-
-              {passkeySuccess && (
-                <div className="p-4 rounded-lg glass bg-green-500/10 border border-green-500/20">
-                  <p className="text-sm text-green-500">Biometric login enabled successfully!</p>
-                </div>
-              )}
-
-              <div className="p-4 rounded-lg glass bg-primary/5 border border-primary/20">
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  Your biometric data never leaves your device. Passkeys use Face ID or Touch ID to securely
-                  authenticate without passwords. You can enable biometric login on multiple devices.
-                </p>
+                <Label className="flex-1">
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleImportData}
+                    className="hidden"
+                  />
+                  <Button variant="outline" className="w-full bg-transparent" asChild>
+                    <span>
+                      <Upload className="mr-2 h-4 w-4" />
+                      Import Data
+                    </span>
+                  </Button>
+                </Label>
               </div>
             </div>
           </CardContent>
         </Card>
+
+        {/* Activity Tracking */}
+        <ProfileEnhancements profile={initialProfile} />
 
         {/* AI Personalities */}
         <Card className="glass-strong border-white/20">
@@ -627,6 +551,22 @@ export function SettingsContent({ profile: initialProfile }: SettingsContentProp
             </CardContent>
           </Card>
         )}
+
+        <Card className="glass border-destructive/20">
+          <CardHeader>
+            <CardTitle className="text-destructive">Account Actions</CardTitle>
+            <CardDescription>Log out of your account to clear all local data</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="destructive" onClick={handleLogout} className="w-full">
+              <LogOut className="mr-2 h-4 w-4" />
+              Log Out
+            </Button>
+            <p className="text-xs text-muted-foreground mt-2 text-center">
+              This will clear your session and all local app data
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

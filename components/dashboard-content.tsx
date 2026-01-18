@@ -7,12 +7,17 @@ import { WeightChart } from "@/components/weight-chart"
 import { ProteinProgressRing } from "@/components/protein-progress-ring"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Brain, TrendingDown, TrendingUp, Utensils, LogOut, Activity, Settings } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { Brain, TrendingDown, TrendingUp, Utensils, LogOut, Activity, Settings, Sparkles, ExternalLink } from "lucide-react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { VoiceTrainer } from "@/components/voice-trainer"
 import { type UnitSystem, formatWeight, getProteinMultiplier } from "@/lib/unit-conversion"
+import { ReadinessScore } from "@/components/readiness-score"
+import { DailyWins } from "@/components/daily-wins"
+import { clearAllLocalData } from "@/lib/local-storage"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 
 interface DashboardContentProps {
   profile: {
@@ -20,7 +25,7 @@ interface DashboardContentProps {
     age: number
     weight: number
     height: number
-    why: string
+    why?: string
     id: string
     unit_preference?: UnitSystem
   }
@@ -29,14 +34,16 @@ interface DashboardContentProps {
     logged_at: string
   }>
   todayNutrition: {
-    protein_grams: number
-    calories: number
+    protein?: number
+    calories?: number
   } | null
   hasMoodCheck: boolean
 }
 
 export function DashboardContent({ profile, weightLogs, todayNutrition, hasMoodCheck }: DashboardContentProps) {
   const [showMoodCheck, setShowMoodCheck] = useState(false)
+  const [showRecipeDialog, setShowRecipeDialog] = useState(false)
+  const [ingredients, setIngredients] = useState("")
   const router = useRouter()
 
   const unitSystem = profile.unit_preference || "imperial"
@@ -52,10 +59,19 @@ export function DashboardContent({ profile, weightLogs, todayNutrition, hasMoodC
     return () => clearTimeout(timer)
   }, [hasMoodCheck])
 
-  const handleLogout = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push("/auth/login")
+  const handleLogout = () => {
+    clearAllLocalData()
+    sessionStorage.clear()
+    window.location.href = "/landing"
+  }
+
+  const handleRecipeSearch = () => {
+    if (ingredients.trim()) {
+      const searchQuery = encodeURIComponent(`simple healthy meal recipes with ${ingredients.trim()}`)
+      window.open(`https://www.google.com/search?q=${searchQuery}`, "_blank")
+      setShowRecipeDialog(false)
+      setIngredients("")
+    }
   }
 
   const proteinMultiplier = getProteinMultiplier(unitSystem)
@@ -127,6 +143,12 @@ export function DashboardContent({ profile, weightLogs, todayNutrition, hasMoodC
             </Card>
           </div>
 
+          {/* Readiness Score and Daily Wins */}
+          <div className="grid md:grid-cols-2 gap-6">
+            <ReadinessScore score={78} sleep={7.5} rhr={58} mood="energized" activity={65} />
+            <DailyWins />
+          </div>
+
           {/* Main Dashboard Grid */}
           <div className="grid md:grid-cols-2 gap-6">
             {/* Weight Chart */}
@@ -158,31 +180,46 @@ export function DashboardContent({ profile, weightLogs, todayNutrition, hasMoodC
                 <CardDescription>What do you need today?</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Link href="/recipes">
-                  <Button variant="outline" className="w-full justify-start glass bg-transparent">
-                    <Utensils className="mr-2 h-4 w-4" />
-                    Browse Recipes
-                  </Button>
-                </Link>
-                <Link href="/health-sync">
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start glass bg-transparent"
+                  onClick={() => setShowRecipeDialog(true)}
+                >
+                  <Utensils className="mr-2 h-4 w-4" />
+                  Browse Recipes
+                </Button>
+                <Link href="/settings">
                   <Button variant="outline" className="w-full justify-start glass bg-transparent">
                     <Activity className="mr-2 h-4 w-4" />
                     Health Sync
                   </Button>
                 </Link>
-                <Link href="/therapy">
-                  <Button variant="outline" className="w-full justify-start glass bg-transparent">
-                    <Brain className="mr-2 h-4 w-4" />
-                    Therapy Chat
-                  </Button>
-                </Link>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start glass bg-transparent"
-                  onClick={() => setShowMoodCheck(true)}
+                <a 
+                  href="https://gemini.google.com/app" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
                 >
-                  Check Headspace
-                </Button>
+                  <Button variant="outline" className="w-full justify-between glass bg-transparent">
+                    <span className="flex items-center">
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      AI Therapy Chat
+                    </span>
+                    <ExternalLink className="h-3 w-3 opacity-50" />
+                  </Button>
+                </a>
+                <a 
+                  href="https://www.calm.com" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                >
+                  <Button variant="outline" className="w-full justify-between glass bg-transparent">
+                    <span className="flex items-center">
+                      <Brain className="mr-2 h-4 w-4" />
+                      Check Headspace
+                    </span>
+                    <ExternalLink className="h-3 w-3 opacity-50" />
+                  </Button>
+                </a>
               </CardContent>
             </Card>
           </div>
@@ -198,6 +235,51 @@ export function DashboardContent({ profile, weightLogs, todayNutrition, hasMoodC
       </div>
 
       <MoodCheckDialog open={showMoodCheck} onOpenChange={setShowMoodCheck} />
+
+      {/* Recipe Ingredients Dialog */}
+      <Dialog open={showRecipeDialog} onOpenChange={setShowRecipeDialog}>
+        <DialogContent className="glass-strong">
+          <DialogHeader>
+            <DialogTitle>What ingredients do you have?</DialogTitle>
+            <DialogDescription>
+              Enter the ingredients you have available and we&apos;ll find simple healthy recipes for you.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label htmlFor="ingredients">Available Ingredients</Label>
+              <Input
+                id="ingredients"
+                placeholder="e.g., chicken, broccoli, rice, garlic..."
+                value={ingredients}
+                onChange={(e) => setIngredients(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleRecipeSearch()}
+                className="glass"
+              />
+              <p className="text-xs text-muted-foreground">
+                Separate ingredients with commas for better results
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <Button 
+                variant="outline" 
+                className="flex-1 bg-transparent" 
+                onClick={() => setShowRecipeDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button 
+                className="flex-1" 
+                onClick={handleRecipeSearch}
+                disabled={!ingredients.trim()}
+              >
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Search Recipes
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <VoiceTrainer userId={profile.id} userName={profile.name} />
     </>

@@ -1,0 +1,90 @@
+.container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 120px;
+  height: 120px;
+  animation: entrance 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.butterfly {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 8px rgba(102, 126, 234, 0.4));
+}
+
+/* Entrance animation - rapid flutter on startup */
+@keyframes entrance {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) rotate(-45deg);
+  }
+  50% {
+    transform: scale(1.1) rotate(10deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+/* Main wing flutter animation - rapid initially, then gentle */
+@keyframes flutterFast {
+  0%,
+  100% {
+    transform: rotateY(0deg);
+  }
+  50% {
+    transform: rotateY(-15deg);
+  }
+}
+
+@keyframes flutterGentle {
+  0%,
+  100% {
+    transform: rotateY(0deg) translateY(0);
+  }
+  50% {
+    transform: rotateY(-8deg) translateY(-2px);
+  }
+}
+
+/* Breathing animation - gentle up and down */
+@keyframes breathing {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.wingLeft {
+  transform-origin: 50% 50%;
+  animation: flutterFast 0.3s ease-in-out 0s, flutterGentle 1.5s ease-in-out 1.2s forwards;
+}
+
+.wingRight {
+  transform-origin: 50% 50%;
+  animation: flutterFast 0.3s ease-in-out 0.15s, flutterGentle 1.5s ease-in-out 1.35s forwards;
+}
+
+.butterfly {
+  animation: breathing 3s ease-in-out 2.7s infinite;
+}
+
+/* Glow effect */
+@keyframes glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 8px rgba(102, 126, 234, 0.4));
+  }
+  50% {
+    filter: drop-shadow(0 0 16px rgba(102, 126, 234, 0.8));
+  }
+}
+
+.butterfly:hover {
+  animation: breathing 3s ease-in-out infinite, glow 2s ease-in-out infinite;
+}

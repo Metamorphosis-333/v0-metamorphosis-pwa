@@ -3,9 +3,8 @@
 import { useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { createClient } from "@/lib/supabase/client"
-import { useRouter } from "next/navigation"
 import { Brain, Zap, Minus } from "lucide-react"
+import { saveMoodCheck } from "@/lib/local-storage"
 
 interface MoodCheckDialogProps {
   open: boolean
@@ -14,25 +13,14 @@ interface MoodCheckDialogProps {
 
 export function MoodCheckDialog({ open, onOpenChange }: MoodCheckDialogProps) {
   const [isLoading, setIsLoading] = useState(false)
-  const router = useRouter()
 
   const handleMoodSelection = async (mood: "stressed" | "high-energy" | "neutral") => {
     setIsLoading(true)
-    const supabase = createClient()
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) throw new Error("Not authenticated")
-
-      await supabase.from("mood_checks").insert({
-        user_id: user.id,
-        mood,
-      })
-
+      const energyLevel = mood === "high-energy" ? 8 : mood === "neutral" ? 5 : 3
+      saveMoodCheck(mood, energyLevel)
       onOpenChange(false)
-      router.refresh()
     } catch (error) {
       console.error("[v0] Error saving mood check:", error)
     } finally {

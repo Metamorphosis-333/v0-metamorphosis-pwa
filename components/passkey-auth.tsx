@@ -40,6 +40,8 @@ export function PasskeyAuth({ mode }: PasskeyAuthProps) {
     setError(null)
 
     try {
+      await new Promise((resolve) => setTimeout(resolve, 500))
+
       // Start registration
       const optionsResponse = await fetch("/api/passkey/register/start", {
         method: "POST",
@@ -76,7 +78,7 @@ export function PasskeyAuth({ mode }: PasskeyAuthProps) {
         throw new Error("Failed to complete passkey registration")
       }
 
-      router.push("/onboarding")
+      window.location.href = "/onboarding"
     } catch (err) {
       console.error("[v0] Passkey signup error:", err)
       setError(err instanceof Error ? err.message : "Failed to create passkey")
@@ -91,6 +93,8 @@ export function PasskeyAuth({ mode }: PasskeyAuthProps) {
     setError(null)
 
     try {
+      await new Promise((resolve) => setTimeout(resolve, 500))
+
       // Start authentication
       const optionsResponse = await fetch("/api/passkey/authenticate/start", {
         method: "POST",
@@ -124,7 +128,8 @@ export function PasskeyAuth({ mode }: PasskeyAuthProps) {
       }
 
       const result = await finishResponse.json()
-      router.push(result.redirectUrl || "/dashboard")
+
+      window.location.href = result.redirectUrl || "/dashboard"
     } catch (err) {
       console.error("[v0] Passkey login error:", err)
       setError(err instanceof Error ? err.message : "Failed to authenticate with passkey")
